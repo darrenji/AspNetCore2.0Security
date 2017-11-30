@@ -1,0 +1,6 @@
+﻿<form asp-controller="Security" asp-action="Login" method="post">
+    <input type="hidden" name="returnUrl" value="@ViewBag.ReturnUrl" />
+    <input type="text" name="username" id="username" />
+    <input type="text" name="password" id="password" />
+    <input type="submit"  value="Login" />
+</form>

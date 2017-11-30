@@ -1,0 +1,14 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+
+namespace Darren.Security.Models
+{
+    public class LoginInputModel
+    {
+        public string Username { get; set; }
+        public string Password { get; set; }
+        public string RequestPath { get; set; } 
+    }
+}
