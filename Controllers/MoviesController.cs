@@ -8,11 +8,17 @@ using Microsoft.AspNetCore.Authorization;
 namespace Darren.Security.Controllers
 {
     [Authorize]
+    [Route("movies")]
     public class MoviesController : Controller
     {
-        public IActionResult Index()
+        [HttpGet]
+        public IActionResult Get()
         {
-            return View();
+            var dict = new Dictionary<string, string>();
+            HttpContext.User.Claims.ToList()
+               .ForEach(item => dict.Add(item.Type, item.Value));
+
+            return Ok(dict);
         }
     }
 }

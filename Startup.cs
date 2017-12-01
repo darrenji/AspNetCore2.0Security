@@ -8,10 +8,11 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.Extensions.Configuration;
-using Darren.Security.Services.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
-using Darren.Security.Services.Email;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using Darren.Security.Services;
 
 namespace Darren.Security
 {
@@ -27,24 +28,19 @@ namespace Darren.Security
         // For more information on how to configure your application, visit https://go.microsoft.com/fwlink/?LinkID=398940
         public void ConfigureServices(IServiceCollection services)
         {
-            services.AddTransient<IEmailSender, EmailSender>();
+            services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+                .AddJwtBearer(options => {
+                    options.TokenValidationParameters = new TokenValidationParameters {
+                        ValidateIssuer = true,
+                        ValidateAudience = true,
+                        ValidateLifetime = true,
+                        ValidateIssuerSigningKey = true,
+                        ValidIssuer = "Darren.Security.Bearer",
+                        ValidAudience = "Darren.Security.Bearer",
+                        IssuerSigningKey = JwtSecurityKey.Create("darren-security-key") //这里的security key与产生token时用到的key一致
+                    };
+                });
 
-            services.AddDbContext<AppIdentityDbContext>(options => options.UseSqlServer(configuration["DB_CONN"]));
-            services.AddIdentity<AppIdentityUser, AppIdentityRole>()
-                .AddEntityFrameworkStores<AppIdentityDbContext>()
-                .AddDefaultTokenProviders();
-            services.ConfigureApplicationCookie(options => {
-                options.LoginPath = "/Security/Login";
-                options.LogoutPath = "/Security/Logout";
-                options.AccessDeniedPath = "/Security/AccessDenied";
-                options.Cookie = new CookieBuilder {
-                    HttpOnly = true,
-                    Name = ".Darren.Security.Cookie",
-                    Path = "/",
-                    SameSite = SameSiteMode.Lax,
-                    SecurePolicy = CookieSecurePolicy.SameAsRequest
-                };
-            });
             services.AddMvc();
         }
 
@@ -55,6 +51,7 @@ namespace Darren.Security
             {
                 app.UseDeveloperExceptionPage();
             }
+            app.UseStaticFiles();
             app.UseAuthentication();
             app.UseMvcWithDefaultRoute();
         }
