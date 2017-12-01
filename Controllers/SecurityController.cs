@@ -6,61 +6,219 @@ using Microsoft.AspNetCore.Mvc;
 using Darren.Security.Models;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Identity;
+using Darren.Security.Services.Identity;
+using Darren.Security.Services.Email;
 
 namespace Darren.Security.Controllers
 {
     public class SecurityController : Controller
     {
-        public IActionResult Login(string returnUrl)
+        private readonly UserManager<AppIdentityUser> userManager;
+        private readonly SignInManager<AppIdentityUser> signInManager;
+        private readonly IEmailSender emailSender;
+
+        public SecurityController(
+            UserManager<AppIdentityUser> userManager,
+            SignInManager<AppIdentityUser> signInManager,
+            IEmailSender emailSender)
         {
-            ViewBag.ReturnUrl = returnUrl ?? "/";
+            this.userManager = userManager;
+            this.signInManager = signInManager;
+            this.emailSender = emailSender;
+        }
+
+        #region login, authentication and authorization
+        public IActionResult Login()
+        {
             return View();
         }
 
         [HttpPost]
-        public async Task<IActionResult> Login(LoginInputModel inputModel)
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Login(LoginViewModel model)
         {
-            if (!IsAuthenticate(inputModel.Username, inputModel.Password))
-                return View();
+            if (!ModelState.IsValid)
+                return View(model);
 
-            //claims
-            List<Claim> claims = new List<Claim>
+            //先看看有没有这个用户
+            var user = await this.userManager.FindByNameAsync(model.Username);
+            if (user != null)
             {
-                new Claim(ClaimTypes.Name, "Hi"),
-                new Claim(ClaimTypes.Email, inputModel.Username)
-            };
+                //再看看是否邮箱验证过了
+                if (!await this.userManager.IsEmailConfirmedAsync(user))
+                {
+                    ModelState.AddModelError(string.Empty, "confirm your email please");
+                    return View(model);
+                }
+            }
 
-            //identity
-            ClaimsIdentity identity = new ClaimsIdentity(claims, "cookie");
+            //好了，登录吧
+            var result = await this.signInManager.PasswordSignInAsync(model.Username,
+                model.Password,
+                isPersistent: false,
+                lockoutOnFailure: false);
 
-            //principal
-            ClaimsPrincipal principal = new ClaimsPrincipal(identity);
+            if (result.Succeeded)
+                return RedirectToAction("Index", "Home");
 
-            await HttpContext.SignInAsync(
-                scheme: "DarrenSecurityScheme",
-                principal: principal,
-                properties: new AuthenticationProperties {
-                    //IsPersistent = true, // for remember
-                    //ExpiresUtc = DateTime.UtcNow.AddMinutes(1)
-                });
+            ModelState.AddModelError(string.Empty, "login failied");
+            return View(model);
 
-            return Redirect(inputModel.RequestPath ?? "/");
         }
 
-        public async Task<IActionResult> Logout(string requestPath)
+        public async Task<IActionResult> Logout()
         {
-            await HttpContext.SignOutAsync(scheme: "DarrenSecurityScheme");
-            return RedirectToAction("Login");
+            await this.signInManager.SignOutAsync();
+            return RedirectToAction("Index", "Home");
         }
 
-        public IActionResult Access()
+        public IActionResult AccessDenied()
+        {
+            return View();
+        } 
+        #endregion
+
+        #region register
+        public IActionResult Register()
         {
             return View();
         }
 
-        private bool IsAuthenticate(string username, string password)
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Register(RegisterViewModel model)
         {
-            return (username == "darren" && password == "yes");
+            if (!ModelState.IsValid)
+                return View(model);
+
+            var user = new AppIdentityUser
+            {
+                UserName = model.UserName,
+                Email = model.Email,
+                Age = model.Age
+            };
+
+            var result = await this.userManager.CreateAsync(user, model.Password);
+            if (result.Succeeded)
+            {
+                //登录
+                //await this.signInManager.SignInAsync(user, isPersistent:false);
+
+                //产生验证码
+                var confirmationCode = await this.userManager.GenerateEmailConfirmationTokenAsync(user);
+                //回调地址
+                var callbackurl = Url.Action(
+                    controller: "Security",
+                    action: "ConfirmEmail",
+                    values: new { userId = user.Id, code = confirmationCode },
+                    protocol: Request.Scheme);
+                //发邮件
+                await this.emailSender.SendEmailAsync(email: user.Email, subject: "confirm email", message: callbackurl);
+                return RedirectToAction("Index", "Home");
+            }
+            return View(model);
         }
+
+        //当在邮件中点击的时候，执行这里
+        public async Task<IActionResult> ConfirmEmail(string userId, string code)
+        {
+            if (userId == null || code == null)
+                return RedirectToAction("Index", "Home");
+
+            //先确认是否有用户
+            var user = await this.userManager.FindByIdAsync(userId);
+            if (user == null)
+                throw new ApplicationException($"unable to load user with id {userId}");
+
+            var result = await this.userManager.ConfirmEmailAsync(user, code);
+            if (result.Succeeded)
+            {
+                return View("ConfirmEmail");
+            }
+            return RedirectToAction("Index", "Home");
+        } 
+        #endregion
+
+        #region forgot password
+        public IActionResult ForgotPassword()
+        {
+            return View();
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ForgotPassword(string email)
+        {
+            //先判断参数
+            if (string.IsNullOrEmpty(email))
+            {
+                return View();
+            }
+
+            //根据email找用户
+            var user = await this.userManager.FindByEmailAsync(email);
+            if (user == null)
+                return RedirectToAction("ForgotPasswordEmailSent");
+
+            //用户邮件确认过了吗
+            if (!await this.userManager.IsEmailConfirmedAsync(user))
+                return RedirectToAction("ForgotPasswordEmailSent");
+
+            //发邮件
+            var confirmationCode = await this.userManager.GeneratePasswordResetTokenAsync(user);
+            var callbackurl = Url.Action(controller: "Security",
+                action: "ResetPassword",
+                values: new { userId = user.Id, code = confirmationCode },
+                protocol: Request.Scheme);
+            await this.emailSender.SendEmailAsync(email: user.Email, subject: "reset password", message: callbackurl);
+            return RedirectToAction("ForgotPasswordEmailSent");
+        }
+
+        public IActionResult ForgotPasswordEmailSent()
+        {
+            return View();
+        } 
+        #endregion
+
+        #region reset password
+
+        public IActionResult ResetPassword(string userId, string code)
+        {
+            if (userId == null || code == null)
+            {
+                throw new ApplicationException("code must be supplied for pasword reset");
+            }
+            var model = new ResetPasswordViewModel { Code = code };
+            return View(model);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ResetPassword(ResetPasswordViewModel model)
+        {
+            if (!ModelState.IsValid)
+                return View(model);
+
+            //找找用户
+            var user = await this.userManager.FindByEmailAsync(model.Email);
+            if (user == null)
+                return RedirectToAction("ResetPasswordConfirm");
+
+            var result = await this.userManager.ResetPasswordAsync(user, model.Code, model.Password);
+            if (result.Succeeded)
+                return RedirectToAction("ResetPasswordConfirm");
+
+            foreach (var error in result.Errors)
+                ModelState.AddModelError(string.Empty, error.Description);
+            return View(model);
+
+        }
+
+        public IActionResult ResetPasswordConfirm()
+        {
+            return View();
+        } 
+        #endregion
     }
 }

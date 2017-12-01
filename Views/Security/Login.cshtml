@@ -1,6 +1,11 @@
-﻿<form asp-controller="Security" asp-action="Login" method="post">
-    <input type="hidden" name="returnUrl" value="@ViewBag.ReturnUrl" />
-    <input type="text" name="username" id="username" />
-    <input type="text" name="password" id="password" />
-    <input type="submit"  value="Login" />
+﻿@model Darren.Security.Models.LoginViewModel
+
+<h3>login</h3>
+
+<form asp-controller="Security" asp-action="Login" method="post">
+    <div asp-validation-summary="All"></div>
+
+    <input type="text"  name="Username" placeholder="Username" />
+    <input type="password"  name="Password" placeholder="password"/>
+    <input type="submit" value="Login" />
 </form>

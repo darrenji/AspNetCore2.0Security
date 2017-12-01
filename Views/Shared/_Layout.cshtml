@@ -1,0 +1,35 @@
+﻿<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewBag.Title</title>
+</head>
+<body>
+    <div>
+        @RenderBody()
+
+        <hr />
+
+        <footer>
+            @if(Context.User.Identity.IsAuthenticated)
+            {
+                <p>
+                    @Context.User.Identity.Name (<a asp-controller="Security", asp-action="Logout">Logout</a>)
+                </p>
+
+            }
+            else
+            {
+               
+                <p>
+                    <a asp-controller="Security" asp-action="Login">Login</a> |
+                    <a asp-controller="Security" asp-action="Register">Register</a> |
+                    <a asp-controller="Security" asp-action="ForgotPassword">Forgot Password</a>
+                </p>
+                                                                    
+
+            }
+        </footer>
+    </div>
+</body>
+</html>
+
