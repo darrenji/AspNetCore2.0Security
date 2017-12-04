@@ -1,0 +1,61 @@
+﻿@using Darren.Security.Models.Rentals
+@inject Microsoft.AspNetCore.Authorization.IAuthorizationService authService
+
+<h2>Movies Listing</h2>
+
+<table>
+    <thead>
+        <tr>
+            <th>Movie</th>
+            <th>Rating</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>Thunderball</td>
+            <td>PG</td>
+            <td>
+                @if ((await authService.AuthorizeAsync(User, null, "PaidMember")).Succeeded)
+                {
+                    <a asp-controller="Rentals" asp-action="Rent">Rent</a>
+                }
+                else
+                {
+                    <span>Rent(unabailable)</span>
+                }
+            </td>
+        </tr>
+        <tr>
+            <td>American Pie</td>
+            <td>18</td>
+            <td>
+                @if((await authService.AuthorizeAsync(User, null, "Over18")).Succeeded)
+                {
+                    <a asp-controller="Rentals" asp-action="RentOver18">Rent</a>
+                }
+                else
+                {
+
+                    <span>Rent (unavailable)</span>
+                }
+            </td>
+        </tr>
+        <tr>
+            <td>Despicable Me 3</td>
+            <td>U</td>
+            <td>
+                @if((await authService.AuthorizeAsync(User, new Rental { Title="Despicable Me 3", IsNewRelease=true}, "CanRentNewRelease")).Succeeded)
+                {
+                    <a asp-controller="Rentals" asp-action="RentNewRelease" asp-route-Title="Despicable Me 3" asp-route-IsNewRelease="true">Rent (new)</a>
+
+                }
+                else
+                {
+                    <span>Rent (new) (unavailable)</span>
+
+                }
+            </td>
+        </tr>
+    </tbody>
+</table>

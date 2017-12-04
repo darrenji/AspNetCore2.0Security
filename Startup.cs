@@ -12,7 +12,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
-using Darren.Security.Services;
+using Darren.Security.Auth;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc.Authorization;
 
 namespace Darren.Security
 {
@@ -28,20 +30,30 @@ namespace Darren.Security
         // For more information on how to configure your application, visit https://go.microsoft.com/fwlink/?LinkID=398940
         public void ConfigureServices(IServiceCollection services)
         {
-            services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-                .AddJwtBearer(options => {
-                    options.TokenValidationParameters = new TokenValidationParameters {
-                        ValidateIssuer = true,
-                        ValidateAudience = true,
-                        ValidateLifetime = true,
-                        ValidateIssuerSigningKey = true,
-                        ValidIssuer = "Darren.Security.Bearer",
-                        ValidAudience = "Darren.Security.Bearer",
-                        IssuerSigningKey = JwtSecurityKey.Create("darren-security-key") //这里的security key与产生token时用到的key一致
-                    };
+            services.AddAuthentication("DarrenSecurityScheme")
+                .AddCookie("DarrenSecurityScheme", options => {
+                    options.AccessDeniedPath = new PathString("/Security/Access");
+                    options.LoginPath = new PathString("/Security/Login");
                 });
 
-            services.AddMvc();
+            services.AddAuthorization(options => {
+                options.AddPolicy("Authenticated", policy => policy.RequireAuthenticatedUser());
+
+                options.AddPolicy("Member", policy => policy.RequireClaim("MembershipId"));
+
+                options.AddPolicy("PaidMember", policy => policy.RequireClaim("HasCreditCard", "Y"));
+
+                options.AddPolicy("Over18", policy => policy.Requirements.Add(new AgeRequirement(18)));
+
+                options.AddPolicy("CanRentNewRelease", policy => policy.Requirements.Add(new RentNewReleaseRequirement()));
+            });
+
+            services.AddScoped<IAuthorizationHandler, AgeRequirementHandler>();
+            services.AddScoped<IAuthorizationHandler, RentNewReleaseRequirementHandler>();
+
+            services.AddMvc(options => {
+                options.Filters.Add(new AuthorizeFilter("Authenticated"));
+            });
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
