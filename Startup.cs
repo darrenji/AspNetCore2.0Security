@@ -15,6 +15,8 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc.Authorization;
 using Microsoft.AspNetCore.Mvc.Cors.Internal;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Rewrite;
 
 namespace Darren.Security
 {
@@ -30,12 +32,9 @@ namespace Darren.Security
         // For more information on how to configure your application, visit https://go.microsoft.com/fwlink/?LinkID=398940
         public void ConfigureServices(IServiceCollection services)
         {
-            services.AddCors(options => {
-                options.AddPolicy("darren", policy => policy.WithOrigins("localhost:21314"));
-            });
 
             services.AddMvc(options => {
-                options.Filters.Add(new CorsAuthorizationFilterFactory("darren"));
+                options.Filters.Add(new RequireHttpsAttribute());
             });
         }
 
@@ -46,6 +45,11 @@ namespace Darren.Security
             {
                 app.UseDeveloperExceptionPage();
             }
+
+            //https
+            var options = new RewriteOptions()
+                .AddRedirectToHttps(StatusCodes.Status301MovedPermanently, 44384);
+
             app.UseStaticFiles();
             app.UseAuthentication();
             app.UseMvcWithDefaultRoute();
