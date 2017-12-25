@@ -17,6 +17,8 @@ using Microsoft.AspNetCore.Mvc.Authorization;
 using Microsoft.AspNetCore.Mvc.Cors.Internal;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Rewrite;
+using Microsoft.AspNetCore.DataProtection;
+using System.IO;
 
 namespace Darren.Security
 {
@@ -34,6 +36,15 @@ namespace Darren.Security
         {
 
             services.AddMvc();
+            services.AddDataProtection()
+                .SetApplicationName("Darren.Security")
+                .PersistKeysToFileSystem(new DirectoryInfo(@"C:\DATA\Work\_Darren\Keys"))
+                .SetDefaultKeyLifetime(TimeSpan.FromDays(7))
+                .UseCryptographicAlgorithms(new Microsoft.AspNetCore.DataProtection.AuthenticatedEncryption.ConfigurationModel.AuthenticatedEncryptorConfiguration
+                {
+                    EncryptionAlgorithm = Microsoft.AspNetCore.DataProtection.AuthenticatedEncryption.EncryptionAlgorithm.AES_256_CBC,
+                    ValidationAlgorithm = Microsoft.AspNetCore.DataProtection.AuthenticatedEncryption.ValidationAlgorithm.HMACSHA256
+                });
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
